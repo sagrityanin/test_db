@@ -1,0 +1,149 @@
+services:
+
+  mysql:
+    image: mysql
+    # NOTE: use of "mysql_native_password" is not recommended:
+    # https://dev.mysql.com/doc/refman/8.0/en/upgrading-from-previous-series.html#upgrade-caching-sha2-password
+    # (this is just an example, not intended to be a production configuration)
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    ports:
+#      - 3303:3303
+      - 33306:3306
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    healthcheck:
+      test: [ "CMD", "mysqladmin" ,"ping", "-h", "localhost" ]
+      interval: 15s
+      timeout: 20s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+    environment:
+      MYSQL_ROOT_PASSWORD: "123qwe"
+      MYSQL_DATABASE: vtk
+    networks:
+      - vtk-network
+
+#  adminer:
+#    image: adminer
+#    restart: always
+#    ports:
+#      - 8080:8080
+
+  postgres:
+    image: postgres:13.7-alpine
+    container_name: vtk_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: vtk_postgres
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: 123qwe
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+    ports:
+      - 5432:5432
+    volumes:
+      - ./postgresql/data:/var/lib/postgresql/data
+    networks:
+      - vtk-network
+
+  vertica:
+    image: vertica/vertica-ce
+    #    image: jbfavre/vertica:latest
+    container_name: vertica
+    hostname: vertica
+    environment:
+      APP_DB_USER: "app"
+      APP_DB_PASSWORD: "123qwe"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.2'
+          memory: 2000M
+    volumes:
+      - ./vertica/data:/data
+    ports:
+      - "5433:5433"
+      - "5444:5444"
+    networks:
+      - vtk-network
+
+  clickhouse:
+    image: yandex/clickhouse-server:21.3.20.1-alpine
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    healthcheck:
+      test: wget -q --tries=1 -O - http://127.0.0.1:8123/?query="SHOW%20TABLES%20FROM%20default" | grep test || exit 1
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    depends_on:
+      mysql:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.2'
+          memory: 2000M
+    volumes:
+      - ./clickhouse/data:/var/lib/clickhouse
+    #      - ./clickhouse/clickhouse-db.sql:/docker-entrypoint-initdb.d/clickhouse-db.sql:ro
+    #      - ./clickhouse/clickhouse_test.sql:/docker-entrypoint-initdb.d/clickhouse-db.sql
+    networks:
+      - vtk-network
+
+
+#  mongo:
+#    container_name: mongo-vtk
+#    hostname: mongo-vtk
+#    image: mongo
+#    ports:
+#      - 27017:27017
+#    expose:
+#      - "27017"
+#    volumes:
+#      - /etc/localtime:/etc/localtime:ro
+#      - ./mongo/init/init_script.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
+#      - ./mongo/data:/data/db
+##    command: mongod --quiet --replSet mongors
+#    deploy:
+#      resources:
+#        limits:
+#          cpus: "2"
+#    healthcheck:
+#      test: echo 'db.runCommand("ping").ok' | mongosh mongo:27017/test --quiet
+#      interval: 10s
+#      timeout: 5s
+#      retries: 10
+#      start_period: 20s
+#    networks:
+#      - vtk-network
+
+
+#  dynamodb-local:
+#    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+#    image: "amazon/dynamodb-local:latest"
+#    container_name: dynamodb
+#    ports:
+#      - "8000:8000"
+#    volumes:
+#      - ./dynamodb/ssd:/home/dynamodblocal/data
+#    working_dir: /home/dynamodblocal
+
+
+
+networks:
+    vtk-network:
