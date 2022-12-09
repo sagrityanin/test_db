@@ -9,9 +9,10 @@ STEP = 1000
 
 
 def get_postgres_records():
-    with psycopg2.connect(host="localhost", user="app", password="123qwe", database="vtk_postgres") as conn:
+    with psycopg2.connect(host="localhost", user="app", password="123qwe",
+                          database="vtk_postgres") as conn:
         cursor = conn.cursor(cursor_factory=DictCursor)
-        query = f"select * from station_rel_10000 ;"
+        query = f"select * from station_rel_10000;"
         cursor.execute(query)
         while res := cursor.fetchmany(STEP):
             yield res

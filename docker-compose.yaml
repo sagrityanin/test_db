@@ -2,13 +2,13 @@ services:
 
   mysql:
     image: mysql
+    container_name: mysql
     # NOTE: use of "mysql_native_password" is not recommended:
     # https://dev.mysql.com/doc/refman/8.0/en/upgrading-from-previous-series.html#upgrade-caching-sha2-password
     # (this is just an example, not intended to be a production configuration)
     command: --default-authentication-plugin=mysql_native_password
     restart: always
     ports:
-#      - 3303:3303
       - 33306:3306
     volumes:
       - ./mysql/data:/var/lib/mysql
@@ -22,10 +22,11 @@ services:
         limits:
           cpus: "2"
     environment:
-      MYSQL_ROOT_PASSWORD: "123qwe"
-      MYSQL_DATABASE: vtk
+      MYSQL_ROOT_PASSWORD: $MYSQL_PASSWORD
+      MYSQL_DATABASE: $MYSQL_DATABASE
     networks:
       - vtk-network
+    env_file: .env
 
 #  adminer:
 #    image: adminer
@@ -38,24 +39,27 @@ services:
     container_name: vtk_postgres
     restart: always
     environment:
-      POSTGRES_DB: vtk_postgres
-      POSTGRES_USER: app
-      POSTGRES_PASSWORD: 123qwe
+      POSTGRES_DB: $POSTGRES_DATABASE
+      POSTGRES_USER: $POSTGRES_USER
+      POSTGRES_PASSWORD: $POSTGRES_PASSWORD
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test:  [ "CMD-SHELL", "pg_isready -U app -d $POSTGRES_DATABASE" ]
       interval: 15s
       timeout: 5s
       retries: 5
     deploy:
       resources:
         limits:
-          cpus: "2"
+          cpus: "1.2"
     ports:
       - 5432:5432
     volumes:
+      - ./postgresql/postgres_config/set_schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
       - ./postgresql/data:/var/lib/postgresql/data
+
     networks:
       - vtk-network
+    env_file: .env
 
   vertica:
     image: vertica/vertica-ce
@@ -63,8 +67,8 @@ services:
     container_name: vertica
     hostname: vertica
     environment:
-      APP_DB_USER: "app"
-      APP_DB_PASSWORD: "123qwe"
+      APP_DB_USER: $VERTICA_USER
+      APP_DB_PASSWORD: $VERTICA_PASSWORD
     deploy:
       resources:
         limits:
@@ -77,6 +81,7 @@ services:
       - "5444:5444"
     networks:
       - vtk-network
+    env_file: .env
 
   clickhouse:
     image: yandex/clickhouse-server:21.3.20.1-alpine
@@ -84,10 +89,11 @@ services:
     ports:
       - "8123:8123"
       - "9000:9000"
+#    restart: always
     healthcheck:
-      test: wget -q --tries=1 -O - http://127.0.0.1:8123/?query="SHOW%20TABLES%20FROM%20default" | grep test || exit 1
-      interval: 5s
-      timeout: 3s
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 30s
+      timeout: 10s
       retries: 5
       start_period: 5s
     depends_on:
@@ -100,6 +106,7 @@ services:
           memory: 2000M
     volumes:
       - ./clickhouse/data:/var/lib/clickhouse
+      - ./clickhouse/log:/var/log
     #      - ./clickhouse/clickhouse-db.sql:/docker-entrypoint-initdb.d/clickhouse-db.sql:ro
     #      - ./clickhouse/clickhouse_test.sql:/docker-entrypoint-initdb.d/clickhouse-db.sql
     networks:
